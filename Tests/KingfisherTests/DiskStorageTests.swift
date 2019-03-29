@@ -182,22 +182,69 @@ class DiskStorageTests: XCTestCase {
             lastAccessDate: now,
             estimatedExpirationDate: now.addingTimeInterval(1),
             isDirectory: false,
-            fileSize: 1)
+            fileSize: 1,
+            expiration: .never)
         let file2 = DiskStorage.FileMeta(
             fileURL: urls[1],
             lastAccessDate: now.addingTimeInterval(1),
             estimatedExpirationDate: now.addingTimeInterval(2),
             isDirectory: false,
-            fileSize: 1)
+            fileSize: 1,
+            expiration: .never)
         let file3 = DiskStorage.FileMeta(
             fileURL: urls[2],
             lastAccessDate: now.addingTimeInterval(2),
             estimatedExpirationDate: now.addingTimeInterval(3),
             isDirectory: false,
-            fileSize: 1)
+            fileSize: 1,
+            expiration: .never)
 
         let ordered = [file2, file1, file3].sorted(by: DiskStorage.FileMeta.lastAccessDate)
         XCTAssertTrue(ordered[0].lastAccessDate! > ordered[1].lastAccessDate!)
         XCTAssertTrue(ordered[1].lastAccessDate! > ordered[2].lastAccessDate!)
+    }
+
+    func testFileMetaExpiration() {
+        let urls = [URL(string: "test1")!, URL(string: "test2")!, URL(string: "test3")!, URL(string: "test4")!]
+
+        let now = Date()
+        let oneMinAgo = now.addingTimeInterval(-60)
+
+        let file1 = DiskStorage.FileMeta(
+            fileURL: urls[0],
+            lastAccessDate: now,
+            estimatedExpirationDate: oneMinAgo,
+            isDirectory: false,
+            fileSize: 1,
+            expiration: .seconds(10))
+
+        let file2 = DiskStorage.FileMeta(
+            fileURL: urls[1],
+            lastAccessDate: now,
+            estimatedExpirationDate: oneMinAgo,
+            isDirectory: false,
+            fileSize: 1,
+            expiration: .seconds(70))
+
+        let file3 = DiskStorage.FileMeta(
+            fileURL: urls[2],
+            lastAccessDate: now.addingTimeInterval(1),
+            estimatedExpirationDate: now.addingTimeInterval(2),
+            isDirectory: false,
+            fileSize: 1,
+            expiration: .never)
+
+        let file4 = DiskStorage.FileMeta(
+            fileURL: urls[3],
+            lastAccessDate: now.addingTimeInterval(1),
+            estimatedExpirationDate: now.addingTimeInterval(2),
+            isDirectory: false,
+            fileSize: 1,
+            expiration: .expired)
+
+        XCTAssertTrue(file1.expired(referenceDate: now))
+        XCTAssertTrue(!file2.expired(referenceDate: now))
+        XCTAssertTrue(!file3.expired(referenceDate: now))
+        XCTAssertTrue(file4.expired(referenceDate: now))
     }
 }

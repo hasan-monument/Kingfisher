@@ -134,7 +134,7 @@ public enum DiskStorage {
             let meta: FileMeta
             do {
                 let resourceKeys: Set<URLResourceKey> = [.contentModificationDateKey, .creationDateKey]
-                meta = try FileMeta(fileURL: fileURL, resourceKeys: resourceKeys)
+                meta = try FileMeta(fileURL: fileURL, resourceKeys: resourceKeys, expiration: config.expiration)
             } catch {
                 throw KingfisherError.cacheError(
                     reason: .invalidURLResource(error: error, key: key, url: fileURL))
@@ -235,7 +235,7 @@ public enum DiskStorage {
             let keys = Set(propertyKeys)
             let expiredFiles = urls.filter { fileURL in
                 do {
-                    let meta = try FileMeta(fileURL: fileURL, resourceKeys: keys)
+                    let meta = try FileMeta(fileURL: fileURL, resourceKeys: keys, expiration: config.expiration)
                     if meta.isDirectory {
                         return false
                     }
@@ -266,7 +266,7 @@ public enum DiskStorage {
 
             let urls = try allFileURLs(for: propertyKeys)
             var pendings: [FileMeta] = urls.compactMap { fileURL in
-                guard let meta = try? FileMeta(fileURL: fileURL, resourceKeys: keys) else {
+                guard let meta = try? FileMeta(fileURL: fileURL, resourceKeys: keys, expiration: config.expiration) else {
                     return nil
                 }
                 return meta
@@ -291,7 +291,7 @@ public enum DiskStorage {
             let keys = Set(propertyKeys)
             let totalSize: UInt = urls.reduce(0) { size, fileURL in
                 do {
-                    let meta = try FileMeta(fileURL: fileURL, resourceKeys: keys)
+                    let meta = try FileMeta(fileURL: fileURL, resourceKeys: keys, expiration: config.expiration)
                     return size + UInt(meta.fileSize)
                 } catch {
                     return size
@@ -363,19 +363,21 @@ extension DiskStorage {
         let estimatedExpirationDate: Date?
         let isDirectory: Bool
         let fileSize: Int
+        let expiration: StorageExpiration
         
         static func lastAccessDate(lhs: FileMeta, rhs: FileMeta) -> Bool {
             return lhs.lastAccessDate ?? .distantPast > rhs.lastAccessDate ?? .distantPast
         }
         
-        init(fileURL: URL, resourceKeys: Set<URLResourceKey>) throws {
+        init(fileURL: URL, resourceKeys: Set<URLResourceKey>, expiration: StorageExpiration) throws {
             let meta = try fileURL.resourceValues(forKeys: resourceKeys)
             self.init(
                 fileURL: fileURL,
                 lastAccessDate: meta.creationDate,
                 estimatedExpirationDate: meta.contentModificationDate,
                 isDirectory: meta.isDirectory ?? false,
-                fileSize: meta.fileSize ?? 0)
+                fileSize: meta.fileSize ?? 0,
+                expiration: expiration)
         }
         
         init(
@@ -383,17 +385,23 @@ extension DiskStorage {
             lastAccessDate: Date?,
             estimatedExpirationDate: Date?,
             isDirectory: Bool,
-            fileSize: Int)
+            fileSize: Int,
+            expiration: StorageExpiration)
         {
             self.url = fileURL
             self.lastAccessDate = lastAccessDate
             self.estimatedExpirationDate = estimatedExpirationDate
             self.isDirectory = isDirectory
             self.fileSize = fileSize
+            self.expiration = expiration
         }
 
         func expired(referenceDate: Date) -> Bool {
-            return estimatedExpirationDate?.isPast(referenceDate: referenceDate) ?? true
+            guard let lastEstimatedExpiration = estimatedExpirationDate else {
+                return true
+            }
+            let expirationDate = expiration.estimatedExpirationSince(lastEstimatedExpiration)
+            return expirationDate.isPast(referenceDate: referenceDate)
         }
         
         func extendExpiration(with fileManager: FileManager) {
